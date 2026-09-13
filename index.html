@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>تقویم ۱۴۰۵ | صفر و یک</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<!-- ====================================================================
+  راهنمای راه‌اندازی (فقط یک‌بار لازمه):
+
+  ۱) برو به https://console.firebase.google.com و یک پروژه‌ی رایگان جدید بساز
+     (اسمش مهم نیست، مثلاً zero-and-one-calendar)
+
+  ۲) از منوی سمت چپ روی Build > Firestore Database بزن > Create database
+     > حالت "Start in test mode" رو انتخاب کن (بعداً می‌تونیم امن‌ترش کنیم)
+
+  ۳) از منوی سمت چپ روی آیکون چرخ‌دنده (Project settings) بزن، پایین صفحه
+     بخش "Your apps" رو پیدا کن، روی آیکون وب "</>" بزن، یک اسم بده و
+     "Register app" بزن. یک شیء (object) به این شکل بهت می‌ده:
+
+     const firebaseConfig = {
+       apiKey: "...",
+       authDomain: "...",
+       projectId: "...",
+       storageBucket: "...",
+       messagingSenderId: "...",
+       appId: "..."
+     };
+
+  ۴) دقیقاً همون مقادیر رو به‌جای FIREBASE_CONFIG_PLACEHOLDER پایین همین فایل
+     (چند خط پایین‌تر، داخل تگ script) جایگزین کن.
+
+  ۵) توی Firestore Database > Rules، این قانون رو بذار و Publish کن
+     (دسترسی باز برای گروه کوچیک، چون نیازی به لاگین نداریم):
+
+     rules_version = '2';
+     service cloud.firestore {
+       match /databases/{database}/documents {
+         match /days/{docId} {
+           allow read, write: if true;
+         }
+       }
+     }
+
+  ۶) این فایل رو با اسم index.html توی یک ریپازیتوری گیت‌هاب بذار،
+     از Settings > Pages، Source رو روی شاخه‌ی main بذار و Save کن.
+     بعد چند دقیقه لینکت آماده‌ست: https://USERNAME.github.io/REPO_NAME/
+==================================================================== -->
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+
+<style>
+  :root{
+    --ink:#12141a;
+    --surface:#1c1f28;
+    --surface-2:#242833;
+    --line:#333845;
+    --text:#ece8e0;
+    --muted:#8b90a0;
+    --amber:#d4a054;
+    --rose:#b8564f;
+    --sage:#6f9077;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--ink);color:var(--text);}
+  body{
+    font-family:'Vazirmatn',sans-serif;
+    min-height:100vh;
+    background:
+      radial-gradient(circle at 15% 8%, rgba(212,160,84,0.07), transparent 45%),
+      radial-gradient(circle at 90% 90%, rgba(111,144,119,0.06), transparent 40%),
+      var(--ink);
+    padding:28px 16px 60px;
+  }
+  .wrap{max-width:920px;margin:0 auto;}
+
+  .banner{
+    display:none;background:rgba(184,86,79,0.12);border:1px solid var(--rose);color:#f0c9c6;
+    border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.8;margin-bottom:18px;
+  }
+  .banner.show{display:block;}
+  .banner b{color:var(--rose);}
+  .banner code{background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:4px;font-family:'Space Mono',monospace;}
+
+  header{
+    display:flex;flex-direction:column;gap:6px;
+    padding-bottom:22px;margin-bottom:22px;
+    border-bottom:1px solid var(--line);
+  }
+  .eyebrow{
+    font-family:'Space Mono',monospace;
+    font-size:12px;letter-spacing:.14em;color:var(--amber);
+    display:flex;align-items:center;gap:10px;
+  }
+  .eyebrow .bit{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:16px;height:16px;border:1px solid var(--amber);border-radius:3px;
+    font-size:10px;color:var(--amber);
+  }
+  h1{
+    margin:2px 0 0;font-weight:800;font-size:30px;letter-spacing:-.01em;
+    display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+  }
+  h1 small{font-family:'Space Mono',monospace;font-size:15px;font-weight:400;color:var(--muted);}
+  .sub{color:var(--muted);font-size:14px;line-height:1.9;max-width:64ch;margin-top:6px;}
+  .sync-state{font-family:'Space Mono',monospace;font-size:11px;color:var(--sage);margin-top:8px;}
+  .sync-state.err{color:var(--rose);}
+
+  .idbar{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:12px 14px;margin-bottom:22px;
+  }
+  .idbar label{font-size:13px;color:var(--muted);white-space:nowrap;}
+  .idbar input{
+    flex:1;min-width:140px;background:var(--surface-2);border:1px solid var(--line);
+    color:var(--text);border-radius:8px;padding:8px 12px;font-family:'Vazirmatn';font-size:14px;
+    outline:none;
+  }
+  .idbar input:focus{border-color:var(--amber);}
+  .idbar .status{font-size:12px;color:var(--sage);font-family:'Space Mono',monospace;min-width:90px;text-align:left;}
+  .idbar .hint{font-size:11.5px;color:var(--muted);width:100%;order:99;line-height:1.7;}
+
+  .seasons{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+  .season-btn{
+    flex:1;min-width:120px;background:var(--surface);border:1px solid var(--line);
+    color:var(--muted);padding:12px 10px;border-radius:12px;cursor:pointer;
+    font-family:'Vazirmatn';font-size:14px;font-weight:600;text-align:center;
+    transition:.15s;position:relative;overflow:hidden;
+  }
+  .season-btn .sym{font-family:'Space Mono',monospace;font-size:11px;display:block;color:var(--muted);margin-bottom:3px;letter-spacing:.1em;}
+  .season-btn.active{background:linear-gradient(160deg, var(--surface-2), var(--surface));border-color:var(--amber);color:var(--text);}
+  .season-btn.active .sym{color:var(--amber);}
+  .season-btn:hover{border-color:var(--amber);}
+
+  .months{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;}
+  .month-btn{
+    background:transparent;border:1px solid var(--line);color:var(--muted);
+    padding:7px 14px;border-radius:20px;cursor:pointer;font-family:'Vazirmatn';
+    font-size:13px;transition:.15s;
+  }
+  .month-btn.active{background:var(--amber);border-color:var(--amber);color:#1a1408;font-weight:700;}
+  .month-btn:hover{border-color:var(--amber);}
+
+  .cal-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px;}
+  .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+  .cal-head h2{margin:0;font-size:20px;font-weight:700;}
+  .cal-head .range{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);}
+
+  .weekdays{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:8px;}
+  .weekdays span{text-align:center;font-size:11px;color:var(--muted);font-family:'Space Mono',monospace;letter-spacing:.05em;}
+  .weekdays span.fri{color:var(--rose);}
+
+  .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:7px;align-items:stretch;}
+  .cell{
+    min-height:92px;background:var(--surface-2);border:1px solid var(--line);
+    border-radius:9px;position:relative;cursor:pointer;display:flex;flex-direction:column;
+    gap:4px;padding:7px 6px;transition:.15s;overflow:hidden;
+  }
+  .cell.empty{background:transparent;border-color:transparent;cursor:default;min-height:0;}
+  .cell:not(.empty):hover{border-color:var(--amber);transform:translateY(-1px);}
+  .cell.fri{background:rgba(184,86,79,0.06);}
+  .cell .top-row{display:flex;justify-content:space-between;align-items:center;}
+  .cell .daynum{font-weight:700;font-size:14px;}
+  .cell .bit{
+    font-family:'Space Mono',monospace;font-size:9px;
+    color:var(--line);
+  }
+  .cell.has-entries .bit{color:var(--amber);}
+  .chips{display:flex;flex-direction:column;gap:3px;overflow:hidden;}
+  .chip{
+    font-size:10.5px;line-height:1.35;border-radius:5px;padding:3px 6px;
+    background:rgba(255,255,255,0.05);overflow:hidden;text-overflow:ellipsis;
+    border-right:3px solid var(--rose);display:block;
+  }
+  .chip .cname{font-weight:700;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .chip .ctext{color:var(--muted);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:9.5px;}
+  .chip.note{border-right-color:var(--sage);}
+  .chip.more{background:transparent;color:var(--muted);text-align:center;border-right:none;font-family:'Space Mono',monospace;}
+  .cell.today{outline:1.5px solid var(--amber);}
+
+  .overlay{
+    position:fixed;inset:0;background:rgba(10,11,15,.72);backdrop-filter:blur(2px);
+    display:none;align-items:center;justify-content:center;padding:18px;z-index:50;
+  }
+  .overlay.open{display:flex;}
+  .modal{
+    background:var(--surface);border:1px solid var(--line);border-radius:16px;
+    width:100%;max-width:420px;max-height:86vh;overflow-y:auto;padding:22px;
+  }
+  .modal h3{margin:0 0 3px;font-size:18px;}
+  .modal .m-sub{font-size:12px;color:var(--muted);font-family:'Space Mono',monospace;margin-bottom:16px;}
+  .entry-list{display:flex;flex-direction:column;gap:8px;margin-bottom:16px;}
+  .entry{
+    background:var(--surface-2);border:1px solid var(--line);border-radius:10px;
+    padding:9px 12px;display:flex;align-items:flex-start;gap:8px;
+  }
+  .entry .edot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0;background:var(--rose);}
+  .entry .edot.note{background:var(--sage);}
+  .entry .etext{flex:1;font-size:13.5px;line-height:1.6;}
+  .entry .ename{font-weight:700;color:var(--amber);}
+  .entry .etype{color:var(--muted);font-size:11px;display:block;font-family:'Space Mono',monospace;margin-top:1px;}
+  .entry button.del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px;flex-shrink:0;}
+  .entry button.del:hover{color:var(--rose);}
+  .entry .lock{color:var(--line);font-size:13px;flex-shrink:0;padding:2px 4px;}
+  .empty-note{color:var(--muted);font-size:13px;text-align:center;padding:14px 0;}
+
+  .add-form{border-top:1px solid var(--line);padding-top:14px;display:flex;flex-direction:column;gap:10px;}
+  .type-row{display:flex;gap:8px;}
+  .type-btn{
+    flex:1;padding:9px;border-radius:9px;border:1px solid var(--line);background:var(--surface-2);
+    color:var(--muted);font-family:'Vazirmatn';font-size:12.5px;cursor:pointer;font-weight:600;
+  }
+  .type-btn.sel-busy.active{background:var(--rose);border-color:var(--rose);color:#fff;}
+  .type-btn.sel-note.active{background:var(--sage);border-color:var(--sage);color:#0e1710;}
+  .add-form textarea{
+    background:var(--surface-2);border:1px solid var(--line);border-radius:9px;color:var(--text);
+    padding:10px 12px;font-family:'Vazirmatn';font-size:13.5px;resize:none;min-height:56px;outline:none;
+  }
+  .add-form textarea:focus{border-color:var(--amber);}
+  .form-actions{display:flex;gap:8px;}
+  .btn{
+    padding:10px 16px;border-radius:9px;border:1px solid var(--line);cursor:pointer;
+    font-family:'Vazirmatn';font-size:13.5px;font-weight:700;
+  }
+  .btn.primary{background:var(--amber);border-color:var(--amber);color:#1a1408;flex:1;}
+  .btn.ghost{background:transparent;color:var(--muted);}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+
+  .legend{display:flex;gap:16px;margin-top:14px;font-size:12px;color:var(--muted);flex-wrap:wrap;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .legend .d{width:7px;height:7px;border-radius:50%;}
+
+  footer{margin-top:26px;text-align:center;color:var(--muted);font-size:12px;font-family:'Space Mono',monospace;}
+  @media(max-width:480px){
+    .cell{min-height:82px;}
+    .cell .daynum{font-size:12.5px;}
+    .chip{font-size:9.5px;}
+    .chip .ctext{font-size:8.7px;}
+    h1{font-size:24px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="banner" id="storageBanner">
+    ⚠ <b>هنوز به Firebase وصل نیستی.</b> بالای همین فایل (index.html) یک بلوک راهنما هست —
+    مقدار <code>firebaseConfig</code> رو با اطلاعات پروژه‌ی Firebase خودت پر کن تا داده‌ها واقعاً بین همه ذخیره و هماهنگ بشن.
+    تا اون موقع هرچی ثبت کنی فقط توی همین مرورگر می‌مونه.
+  </div>
+
+  <header>
+    <div class="eyebrow"><span class="bit" id="headerBit">1</span> تقویم مشترک گروه</div>
+    <h1>صفر و یک <small>سال ۱۴۰۵</small></h1>
+    <p class="sub">هر روزی که نیستید یا کار دیگه‌ای دارید رو همینجا مشخص کنید تا اون روز تمرین ست نشه. اسم و توضیح هرکس همون روی خودِ روز نشون داده می‌شه و هر تغییری که هرکس بده، همه می‌بینن.</p>
+    <div class="sync-state" id="syncState">در حال اتصال…</div>
+  </header>
+
+  <div class="idbar">
+    <label for="nameInput">اسم شما:</label>
+    <input id="nameInput" type="text" placeholder="مثلاً امیرعلی" maxlength="24">
+    <span class="status" id="nameStatus"></span>
+    <span class="hint">فقط یادداشت‌هایی که با همین اسم ثبت کرده باشید قابل حذف‌اند — پس هر بار با یک اسم ثابت وارد شوید.</span>
+  </div>
+
+  <div class="seasons" id="seasons"></div>
+  <div class="months" id="months"></div>
+
+  <div class="cal-card">
+    <div class="cal-head">
+      <h2 id="calTitle">فروردین</h2>
+      <span class="range" id="calRange"></span>
+    </div>
+    <div class="weekdays">
+      <span>ش</span><span>ی</span><span>د</span><span>س</span><span>چ</span><span>پ</span><span class="fri">ج</span>
+    </div>
+    <div class="grid" id="grid"></div>
+    <div class="legend">
+      <span><span class="d" style="background:var(--rose)"></span> نیستم / کار دارم</span>
+      <span><span class="d" style="background:var(--sage)"></span> یادداشت آزاد</span>
+      <span style="font-family:'Space Mono',monospace">۱ = این روز چیزی ثبت شده</span>
+    </div>
+  </div>
+
+  <footer>zero-and-one · تقویم مشترک · روی Firebase ذخیره و همگام می‌شود</footer>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h3 id="modalTitle">—</h3>
+    <div class="m-sub" id="modalSub">—</div>
+    <div class="entry-list" id="entryList"></div>
+    <div class="add-form">
+      <div class="type-row">
+        <button class="type-btn sel-busy active" id="typeBusy">نیستم / کار دارم</button>
+        <button class="type-btn sel-note" id="typeNote">یادداشت آزاد</button>
+      </div>
+      <textarea id="noteText" placeholder="توضیح کوتاه (اختیاری) — مثلاً «کلاس دارم تا ۸ شب»"></textarea>
+      <div class="form-actions">
+        <button class="btn primary" id="saveEntry">ثبت برای این روز</button>
+        <button class="btn ghost" id="closeModal">بستن</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ====================================================================
+   اطلاعات پروژه‌ی Firebase خودت رو اینجا جایگزین کن (مرحله ۴ راهنمای بالا)
+   ==================================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyBoRCMahqQqVp4XLrjuDHwhkW-h58YiM9Q",
+  authDomain: "o1band.firebaseapp.com",
+  projectId: "o1band",
+  storageBucket: "o1band.firebasestorage.app",
+  messagingSenderId: "223459105934",
+  appId: "1:223459105934:web:ebb852b2925cd24076bddf"
+};
+
+const isConfigured = firebaseConfig.apiKey !== "FIREBASE_CONFIG_PLACEHOLDER";
+let db = null;
+if(isConfigured){
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+} else {
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('storageBanner').classList.add('show');
+    document.getElementById('syncState').textContent = '⚠ آفلاین — Firebase تنظیم نشده';
+    document.getElementById('syncState').classList.add('err');
+  });
+}
+
+const MONTHS = [
+  {name:"فروردین", days:31, start:0, season:"بهار"},
+  {name:"اردیبهشت", days:31, start:3, season:"بهار"},
+  {name:"خرداد", days:31, start:6, season:"بهار"},
+  {name:"تیر", days:31, start:2, season:"تابستان"},
+  {name:"مرداد", days:31, start:5, season:"تابستان"},
+  {name:"شهریور", days:31, start:1, season:"تابستان"},
+  {name:"مهر", days:30, start:4, season:"پاییز"},
+  {name:"آبان", days:30, start:6, season:"پاییز"},
+  {name:"آذر", days:30, start:1, season:"پاییز"},
+  {name:"دی", days:30, start:3, season:"زمستان"},
+  {name:"بهمن", days:30, start:5, season:"زمستان"},
+  {name:"اسفند", days:29, start:0, season:"زمستان"}
+];
+const SEASONS = [
+  {name:"بهار", sym:"01", months:[0,1,2]},
+  {name:"تابستان", sym:"10", months:[3,4,5]},
+  {name:"پاییز", sym:"11", months:[6,7,8]},
+  {name:"زمستان", sym:"00", months:[9,10,11]}
+];
+
+let curSeason = 0;
+let curMonth = 0;
+let curDay = null;
+let curType = 'busy';
+let myName = '';
+
+const $ = id => document.getElementById(id);
+
+// ---- storage layer: Firestore when configured, localStorage fallback (per-browser only) ----
+async function storeGetEntries(dayId){
+  if(db){
+    try{
+      const doc = await db.collection('days').doc(dayId).get();
+      return doc.exists ? (doc.data().entries || []) : [];
+    }catch(e){
+      console.error('firestore get failed', e);
+      $('syncState').textContent = '⚠ خطا در اتصال به Firebase';
+      $('syncState').classList.add('err');
+      return [];
+    }
+  }
+  try{ return JSON.parse(localStorage.getItem('zoy1405:'+dayId) || '[]'); }catch(e){ return []; }
+}
+async function storeSetEntries(dayId, entries){
+  if(db){
+    try{
+      await db.collection('days').doc(dayId).set({entries});
+      $('syncState').textContent = '✓ همگام با بقیه‌ی اعضا';
+      $('syncState').classList.remove('err');
+    }catch(e){
+      console.error('firestore set failed', e);
+      $('syncState').textContent = '⚠ ذخیره نشد — اتصال Firebase رو چک کن';
+      $('syncState').classList.add('err');
+    }
+    return;
+  }
+  localStorage.setItem('zoy1405:'+dayId, JSON.stringify(entries));
+}
+
+function toFa(n){
+  const digits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
+  return String(n).split('').map(c => /[0-9]/.test(c) ? digits[c] : c).join('');
+}
+function escapeHtml(s){
+  const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+}
+function truncate(s, n){
+  return s.length > n ? s.slice(0,n-1)+'…' : s;
+}
+function sameName(a,b){
+  return (a||'').trim().toLowerCase() === (b||'').trim().toLowerCase() && (a||'').trim() !== '';
+}
+function dayId(mi, d){
+  const mm = String(mi+1).padStart(2,'0');
+  const dd = String(d).padStart(2,'0');
+  return `1405-${mm}-${dd}`;
+}
+
+function loadName(){
+  const saved = localStorage.getItem('zoy-member-name');
+  if(saved){ myName = saved; $('nameInput').value = myName; }
+}
+function saveName(){
+  myName = $('nameInput').value.trim();
+  localStorage.setItem('zoy-member-name', myName);
+  $('nameStatus').textContent = myName ? '✓ ذخیره شد' : '';
+  setTimeout(()=>{$('nameStatus').textContent='';}, 1500);
+  renderCalendar();
+}
+$('nameInput').addEventListener('change', saveName);
+$('nameInput').addEventListener('blur', saveName);
+
+function renderSeasons(){
+  const el = $('seasons'); el.innerHTML='';
+  SEASONS.forEach((s, i) => {
+    const b = document.createElement('button');
+    b.className = 'season-btn' + (i===curSeason?' active':'');
+    b.innerHTML = `<span class="sym">${s.sym}</span>${s.name}`;
+    b.onclick = () => { curSeason = i; curMonth = s.months[0]; renderAll(); };
+    el.appendChild(b);
+  });
+}
+function renderMonths(){
+  const el = $('months'); el.innerHTML='';
+  SEASONS[curSeason].months.forEach(mi => {
+    const b = document.createElement('button');
+    b.className = 'month-btn' + (mi===curMonth?' active':'');
+    b.textContent = MONTHS[mi].name;
+    b.onclick = () => { curMonth = mi; renderCalendar(); };
+    el.appendChild(b);
+  });
+}
+
+async function renderCalendar(){
+  const m = MONTHS[curMonth];
+  const renderedMonth = curMonth;
+  $('calTitle').textContent = m.name + ' ۱۴۰۵';
+  $('calRange').textContent = `${toFa(m.days)} روز`;
+  const grid = $('grid'); grid.innerHTML = '';
+
+  for(let i=0;i<m.start;i++){
+    const c = document.createElement('div'); c.className='cell empty'; grid.appendChild(c);
+  }
+
+  for(let d=1; d<=m.days; d++){
+    const weekdayIdx = (m.start + d - 1) % 7;
+    const cell = document.createElement('div');
+    cell.className = 'cell' + (weekdayIdx===6 ? ' fri' : '');
+    cell.innerHTML = `
+      <div class="top-row">
+        <span class="daynum">${toFa(d)}</span>
+        <span class="bit">0</span>
+      </div>
+      <div class="chips"></div>
+    `;
+    cell.onclick = () => openDay(renderedMonth, d);
+    grid.appendChild(cell);
+
+    storeGetEntries(dayId(renderedMonth, d)).then(entries => {
+      if(renderedMonth !== curMonth) return;
+      if(entries.length){
+        cell.classList.add('has-entries');
+        cell.querySelector('.bit').textContent = '1';
+        const chipsEl = cell.querySelector('.chips');
+        const shown = entries.slice(0,3);
+        chipsEl.innerHTML = shown.map(e => `
+          <div class="chip ${e.type==='note'?'note':''}">
+            <span class="cname">${escapeHtml(truncate(e.name||'بی‌نام',12))}</span>
+            ${e.text ? `<span class="ctext">${escapeHtml(truncate(e.text,16))}</span>` : ''}
+          </div>`).join('');
+        if(entries.length > 3){
+          chipsEl.innerHTML += `<div class="chip more">+${toFa(entries.length-3)} مورد دیگر</div>`;
+        }
+      }
+    });
+  }
+}
+
+async function openDay(mi, d){
+  curDay = {mi, d};
+  const m = MONTHS[mi];
+  $('modalTitle').textContent = `${toFa(d)} ${m.name}`;
+  const weekdayIdx = (m.start + d - 1) % 7;
+  const wnames = ["شنبه","یکشنبه","دوشنبه","سه‌شنبه","چهارشنبه","پنجشنبه","جمعه"];
+  $('modalSub').textContent = wnames[weekdayIdx];
+  $('noteText').value = '';
+  setType('busy');
+  await refreshEntryList();
+  $('overlay').classList.add('open');
+}
+
+async function refreshEntryList(){
+  const {mi, d} = curDay;
+  const entries = await storeGetEntries(dayId(mi,d));
+  const list = $('entryList');
+  if(!entries.length){
+    list.innerHTML = '<div class="empty-note">هنوز چیزی برای این روز ثبت نشده</div>';
+    return;
+  }
+  list.innerHTML = entries.map((e, idx) => {
+    const mine = sameName(e.name, myName);
+    return `
+    <div class="entry">
+      <span class="edot ${e.type==='note'?'note':''}"></span>
+      <span class="etext">
+        <span class="ename">${escapeHtml(e.name || 'بدون نام')}</span>
+        ${e.text ? ' — ' + escapeHtml(e.text) : ''}
+        <span class="etype">${e.type==='note' ? 'یادداشت' : 'نیستم / کار دارم'}</span>
+      </span>
+      ${mine
+        ? `<button class="del" data-idx="${idx}" title="حذف">✕</button>`
+        : `<span class="lock" title="فقط ${escapeHtml(e.name)} می‌تونه این رو حذف کنه">🔒</span>`}
+    </div>`;
+  }).join('');
+  list.querySelectorAll('button.del').forEach(btn => {
+    btn.onclick = async () => {
+      const idx = parseInt(btn.dataset.idx);
+      const cur = await storeGetEntries(dayId(curDay.mi, curDay.d));
+      if(!sameName(cur[idx] && cur[idx].name, myName)) return;
+      cur.splice(idx,1);
+      await storeSetEntries(dayId(curDay.mi, curDay.d), cur);
+      await refreshEntryList();
+      renderCalendar();
+    };
+  });
+}
+
+function setType(t){
+  curType = t;
+  $('typeBusy').classList.toggle('active', t==='busy');
+  $('typeNote').classList.toggle('active', t==='note');
+}
+$('typeBusy').onclick = () => setType('busy');
+$('typeNote').onclick = () => setType('note');
+
+$('saveEntry').onclick = async () => {
+  if(!myName){
+    $('nameInput').focus();
+    $('nameStatus').textContent = 'اول اسمت رو بنویس';
+    return;
+  }
+  const {mi, d} = curDay;
+  const entries = await storeGetEntries(dayId(mi,d));
+  entries.push({name: myName, type: curType, text: $('noteText').value.trim(), ts: Date.now()});
+  await storeSetEntries(dayId(mi,d), entries);
+  $('noteText').value = '';
+  await refreshEntryList();
+  renderCalendar();
+};
+$('closeModal').onclick = () => $('overlay').classList.remove('open');
+$('overlay').onclick = (e) => { if(e.target.id==='overlay') $('overlay').classList.remove('open'); };
+
+async function renderAll(){
+  renderSeasons();
+  renderMonths();
+  await renderCalendar();
+}
+
+(function init(){
+  loadName();
+  renderAll();
+  if(isConfigured){
+    $('syncState').textContent = '✓ به Firebase وصل است';
+  }
+})();
+</script>
+</body>
+</html>
